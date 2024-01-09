@@ -1,0 +1,30 @@
+{
+    "name": "douglasthwaites/oh-vapor",
+    "description": "A package to allow Oh-Dear through the AWS WAF controlled by Vapor.",
+    "type": "plugin",
+    "autoload": {
+        "psr-4": {
+            "DouglasThwaites\\OhVapor\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Doug Thwaites",
+            "email": "hello@dougthwaites.nz"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": "^8.0",
+        "illuminate/support": "^10.0",
+        "illuminate/console": "^10.0",
+        "aws/aws-sdk-php": "^3.295"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "DouglasThwaites\\OhVapor\\OhVaporServiceProvider"
+            ]
+        }
+    }
+}
