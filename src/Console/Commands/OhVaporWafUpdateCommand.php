@@ -59,17 +59,15 @@ class OhVaporWafUpdateCommand extends Command
         ]);
 
         $ipSet = $waf->getIPSet([
-            'Id' => 'xxxxxxxx',
-            'Name' => 'OhVaporIpSet',
-            'Scope' => 'REGIONAL'
+            
         ]);
 
-        $webAcl = $waf->getWebACL([
-            'Id' => 'xxxxxxxxx',
-            'Name' => 'vapor-firewall-1704798730',
-            'Scope' => 'REGIONAL'
+        $acl = $waf->getWebACL([
+            
         ]);
 
-        dd($webAcl);
+        $ruleGroup = $waf->updateWebACL();
+
+        dd($ruleGroup);
     }
 }
