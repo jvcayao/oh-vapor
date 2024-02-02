@@ -4,16 +4,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Vapor firewalls
+    | WebACLs
     |--------------------------------------------------------------------------
     |
-    | An array of Vapor firewall Web ACL names to apply to.
-    | By default all Vapor firewalls will be updated.
+    | General WebACL config values
+    |
     |
     */
+    'webACLs' => [
+        'scope' => 'REGIONAL',
+        'description' => 'OhVapor modified WebACL'
+    ],
 
-    'firewalls' => [
-        'vapor-firewall-*'
+    /*
+    |--------------------------------------------------------------------------
+    | Region
+    |--------------------------------------------------------------------------
+    |
+    | Default AWS region
+    |
+    |
+    */
+    'region' => 'us-east-1',
+
+    /*
+    |--------------------------------------------------------------------------
+    | IP Set
+    |--------------------------------------------------------------------------
+    |
+    | Information related to AWS IP set
+    | for OhDear whitelisted IP's
+
+    |
+    */
+    'ip-set' => [
+        'name' => 'OhVaporIpSet',
+        'description' => 'Oh Dear IPV4 monitoring whitelist.'
     ]
 
 ];

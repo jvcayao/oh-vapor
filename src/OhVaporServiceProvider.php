@@ -13,9 +13,10 @@ class OhVaporServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Config
-        $this->publishes([
-            __DIR__.'/../config/oh-vapor.php' => config_path('oh-vapor.php')
-        ], 'oh-vapor-config');
+        $this->mergeConfigFrom(
+            __DIR__.'/config/oh-vapor.php',
+            'oh-vapor'
+        );
 
         // Command
         if ($this->app->runningInConsole()) {

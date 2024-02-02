@@ -5,12 +5,12 @@ namespace DouglasThwaites\OhVapor\Console\Commands;
 use Aws\Result;
 use Aws\WAFV2\WAFV2Client;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
-use function Laravel\Prompts\note;
-use function Laravel\Prompts\info;
-use function Laravel\Prompts\warning;
-use function Laravel\Prompts\error;
-use function Laravel\Prompts\alert;
+use Illuminate\Support\Str;
+use Symfony\Component\Yaml\Yaml;
+use function Laravel\Prompts\spin;
 
 class OhVaporWafUpdateCommand extends Command
 {
@@ -22,6 +22,13 @@ class OhVaporWafUpdateCommand extends Command
     protected $signature = 'oh-vapor:waf:update';
 
     /**
+     * Most recent lock token from AWS
+     *
+     * @var string
+     */
+    protected string $webAclLockToken;
+
+    /**
      * The console command description.
      *
      * @var string
@@ -29,230 +36,280 @@ class OhVaporWafUpdateCommand extends Command
     protected $description = 'Updates the AWS WAF provisioned by Vapor to allow OhDear to monitor your site.';
 
     /**
+     * The AWS WafV2 client
+     *
+     * @var WAFV2Client
+     */
+    private WAFV2Client $client;
+
+    /**
      * Execute the console command.
      */
     public function handle()
     {
-        // Preform checks
-        note('note');
-        info('info');
-        warning('warning');
-        error('error');
-        alert('alert');
+        // Get the current environment
+        $env = app()->environment();
 
-        // Look for the Vapor firewall rule
+        // Get the Vapor configuration
+        $firewallConfig = $this->getVaporFirewallConfig($env);
 
-        // Error out if no Vapor firewall rule exists
-
-        // Pull in updated list of OhDear IP addresses adding a single subnet IP range of /32 to each
+        // Get the WebACL with an API gateway for the current environment
+        $webACL = $this->getWebACL($env);
 
         // Check if IP set exists
+        $ipSet = $this->upsertWhitelistedIpSet();
 
-        // Create IP set if missing
+        // Create modified webACL
+        $modifiedWebACL = $webACL;
 
-        // Update existing IP set
+        // Remove rules from modified webACL
+        $modifiedWebACL['Rules'] = [];
 
-        // Get all the WebACLs
+        // Add OhVapor IP set to rate limit rule
+        if(isset($firewallConfig['rate-limit']))
+        {
+            $modifiedWebACL['Rules'][] = $this->getModifiedRateLimitRule($webACL);
+        }
 
-        // Find the Vapor WebACL
+        // Add OhVapor IP set to bot control rule
+        if(isset($firewallConfig['bot-control']))
+        {
+            $modifiedWebACL['Rules'][] = $this->getModifiedBotControlRule($webACL);
+        }
 
-        // Generate a modified WebACL with the IP set applied
-
-            // Extract an existing rate limit rule if any
-
-            // Extract the current bot controls if any
-
-            // Modify the bot control rule
-
-        // Update the WebACL with the modified version
-
-
-
-
-        $ips = Http::get('https://ohdear.app/used-ips.json')->json();
-
-        $waf = new WAFV2Client([
-            'region' => 'us-east-1'
+        // Update the webACL
+        $result = $this->getWafV2Client()->updateWebACL([
+            ...$modifiedWebACL,
+            'LockToken' => $this->webAclLockToken,
+            'Scope' => config('oh-vapor.webACLs.scope'),
+            'Description' => config('oh-vapor.webACLs.description')
         ]);
 
-        $acls = $waf->listWebACLs([
-            'Scope' => 'REGIONAL'
-        ]);
-
-        $ipSets = $waf->listIPSets([
-            'Scope' => 'REGIONAL'
-        ]);
-
-        $ipSet = $waf->getIPSet([
-            'Id' => 'xxxxxxxxx',
-            'Name' => 'OhVaporIpSet',
-            'Scope' => 'REGIONAL'
-        ]);
-
-        $acl = $waf->getWebACL([
-            'Id' => 'xxxxxxxxxxxx',
-            'Name' => 'vapor-firewall-xxxxxxxxx',
-            'Scope' => 'REGIONAL'
-        ]);
-
-        $webAcl = $this->generateModifiedWebAcl($acl);
-
-        $result = $waf->updateWebACL($webAcl);
-
-        dd($result);
+        $this->info('Updated Vapor/AWS firewall with OhDear monitoring IP addresses.');
     }
 
-    private function generateModifiedWebAcl(Result $vaporRule)
+    /*
+     * Get the Vapor configuration for
+     * the current environment
+     */
+    private function getVaporFirewallConfig(string $environment) : array
     {
-        $acl = [
-            "Scope" => 'REGIONAL',
-            "LockToken" => $vaporRule['LockToken'],
-            'Description' => 'Test description',
-            "Id" => "xxxxxxxxxxxx",
-            "ARN" => $vaporRule['WebACL']['ARN'],
-            "DefaultAction" => [
-                "Allow" => [
-                ]
-            ],
-            "LabelNamespace" => $vaporRule['WebACL']['LabelNamespace'],
-            "ManagedByFirewallManager" => false,
-            "Name" => $vaporRule['WebACL']['Name'],
-            "Rules" => [
-                [
-                    "Action" => [
-                        "Block" => [
+        $path = base_path('vapor.yml');
+        $contents = File::get($path);
+        $config = Yaml::parse($contents);
+
+        // Fail if there is no Vapor configuration for this environment
+        if(!isset($config['environments'][$environment]))
+        {
+            $this->exitAlert('Matching environment not found.');
+        }
+
+        // Fail if there is no Vapor firewall configured
+        if(!isset($config['environments'][$environment]['firewall']))
+        {
+            $this->exitAlert('Firewall configuration not found.');
+        }
+
+        return $config['environments'][$environment]['firewall'];
+    }
+
+    /**
+     * Find the environments related webACL
+     * by comparing API Gateway resources
+     */
+    private function getWebACL(bool|string $env) : bool|array
+    {
+        // Get all webACLs
+        $response = $this->getWafV2Client()->listWebACLs([
+            'Scope' => config('oh-vapor.webACLs.scope')
+        ]);
+
+        // Match environment to API gateway ARN
+        foreach($response['WebACLs'] as $webACL)
+        {
+            $apiGateway = $this->getApiGateway($webACL['ARN']);
+
+            $stage = Str::of($apiGateway['ResourceArns'][0])->explode('/')->last();
+
+            if(app()->environment() != $stage) continue;
+
+            // Retrieve the full webACL
+            $webACL = $this->getWafV2Client()->getWebACL([
+                'Scope' => 'REGIONAL',
+                ...$webACL
+            ]);
+
+            // Update the WebACL LockToken
+            $this->webAclLockToken = $webACL->get('LockToken');
+
+            return $webACL->get('WebACL');
+        }
+
+        $this->exitAlert('Could not match webACL to environment');
+
+        return false;
+    }
+
+    private function getWafV2Client()
+    {
+        return new WAFV2Client([
+            'region' => config('oh-vapor.region')
+        ]);
+    }
+
+    private function getApiGateway(string $arn)
+    {
+        return $this->getWafV2Client()->listResourcesForWebACL([
+            'ResourceType' => 'API_GATEWAY',
+            'WebACLArn' => $arn
+        ]);
+    }
+
+    private function exitAlert(string $string)
+    {
+        $this->alert($string);
+        exit();
+    }
+
+    private function upsertWhitelistedIpSet()
+    {
+        // Pull in updated list of OhDear IP addresses adding a single IP range to each
+        $ohDearIps = $this->getMonitoringIpsFromOhDear();
+
+        // Get the OhVaporIpSet
+        $ohVaporIpSet = $this->getOhVaporIpSet();
+
+        // Create an empty IP set if missing
+        if(empty($ohVaporIpSet)) $ohVaporIpSet = $this->createOhVaporIpSet()['Summary'];
+
+        // Update the OhVapor IP set
+        return $this->getWafV2Client()->updateIPSet([
+            'Addresses' => $ohDearIps,
+            'Scope' => 'REGIONAL',
+            ...$ohVaporIpSet
+        ]);
+    }
+
+    private function createOhVaporIpSet()
+    {
+        return $this->getWafV2Client()->createIPSet([
+            'Name' => config('oh-vapor.ip-set.name'),
+            'Description' => config('oh-vapor.ip-set.name'),
+            'Scope' => 'REGIONAL',
+            'IPAddressVersion' => 'IPV4',
+            'Addresses' => []
+        ]);
+    }
+
+    private function getMonitoringIpsFromOhDear() : array
+    {
+        $data = Http::get('https://ohdear.app/used-ips.json')->json();
+
+        return collect($data)->map(function (array $item) {
+
+            return $item['ipv4'] . '/32';
+
+        })->toArray();
+    }
+
+    private function getModifiedRateLimitRule(array $webACL) : array
+    {
+        // Get firewall config
+        $config = $this->getVaporFirewallConfig(app()->environment());
+
+        // Get the firewall rule
+        $rule = $this->getFirewallRule(
+            $webACL,
+            $webACL['Name'] . '-rate-limit-rule'
+        );
+
+        // Generate the modification
+        $modification = [
+            'AggregateKeyType' => 'IP',
+            'Limit' => $config['rate-limit'],
+            'ScopeDownStatement' => [
+                'NotStatement' => [
+                    'Statement' => [
+                        'IPSetReferenceStatement' => [
+                            'ARN' => $this->getOhVaporIpSet()['ARN']
                         ]
-                    ],
-                    "Name" => "vapor-firewall-xxxxxxx-rate-limit-rule",
-                    "Priority" => 0,
-                    "Statement" => [
-                        "RateBasedStatement" => [
-                            "AggregateKeyType" => "IP",
-                            "EvaluationWindowSec" => 300,
-                            "Limit" => 1000
-                        ]
-                    ],
-                    "VisibilityConfig" => [
-                        "CloudWatchMetricsEnabled" => true,
-                        "MetricName" => "vapor-firewall-xxxxxxxxx-rate-limit",
-                        "SampledRequestsEnabled" => false
                     ]
-                ],
-                [
-                    "Name" => "vapor-firewall-xxxxxxxxx-bot-control-rule",
-                    "OverrideAction" => [
-                        "None" => [
-                        ]
-                    ],
-                    "Priority" => 1,
-                    "Statement" => [
-                        "ManagedRuleGroupStatement" => [
-                            "ManagedRuleGroupConfigs" => [
-                                [
-                                    "AWSManagedRulesBotControlRuleSet" => [
-                                        "InspectionLevel" => "COMMON"
-                                    ]
-                                ]
-                            ],
-                            "Name" => "AWSManagedRulesBotControlRuleSet",
-                            "RuleActionOverrides" => [
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryAdvertising"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryArchiver"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryContentFetcher"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryHttpLibrary"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryLinkChecker"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryMiscellaneous"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategoryMonitoring"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategorySeo"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategorySocialMedia"
-                                ],
-                                [
-                                    "ActionToUse" => [
-                                        "Count" => [
-                                        ]
-                                    ],
-                                    "Name" => "CategorySearchEngine"
-                                ]
-                            ],
-                            "ScopeDownStatement" => [
-                                "NotStatement" => [
-                                    "Statement" => [
-                                        "IPSetReferenceStatement" => [
-                                            "ARN" => "xxxxxxxx"
-                                        ]
-                                    ]
-                                ]
-                            ],
-                            "VendorName" => "AWS"
-                        ]
-                    ],
-                    "VisibilityConfig" => [
-                        "CloudWatchMetricsEnabled" => true,
-                        "MetricName" => "vapor-firewall-xxxxxxx-bot-control",
-                        "SampledRequestsEnabled" => false
-                    ]
                 ]
-            ],
-            "VisibilityConfig" => [
-                "CloudWatchMetricsEnabled" => true,
-                "MetricName" => "vapor-firewall-xxxxxxxxxx",
-                "SampledRequestsEnabled" => false
             ]
         ];
 
-        return $acl;
+        // Add the scope down statement to the RateBasedStatement
+        return [
+            ...$rule,
+            'Statement' => [
+                'RateBasedStatement' => $modification
+            ]
+        ];
+    }
+
+    private function getModifiedBotControlRule(array $webACL) : array
+    {
+        // Get firewall config
+        $config = $this->getVaporFirewallConfig(app()->environment());
+
+        // Get bot control rules
+        $controls = $config['bot-control'];
+
+        // Get the firewall rule
+        $rule = $this->getFirewallRule(
+            $webACL,
+            $webACL['Name'] . '-bot-control-rule'
+        );
+
+        $ruleActionOverrides = [];
+
+        // Generate action overrides
+        foreach ($rule['Statement']['ManagedRuleGroupStatement']['RuleActionOverrides'] as $override)
+        {
+            $ruleActionOverrides[] = $override;
+        }
+
+        // Replace existing statement
+        $rule['Statement'] = [
+            'ManagedRuleGroupStatement' => [
+                'ManagedRuleGroupConfigs' => [[
+                    'AWSManagedRulesBotControlRuleSet' => [
+                        'InspectionLevel' => 'COMMON'
+                    ]
+                ]],
+                'Name' => 'AWSManagedRulesBotControlRuleSet',
+                'RuleActionOverrides' => $ruleActionOverrides,
+                'ScopeDownStatement' => [
+                    'NotStatement' => [
+                        'Statement' => [
+                            'IPSetReferenceStatement' => [
+                                'ARN' => $this->getOhVaporIpSet()['ARN']
+                            ]
+                        ]
+                    ]
+                ],
+                'VendorName' => 'AWS'
+            ],
+
+        ];
+
+        return $rule;
+    }
+
+    private function getFirewallRule(array $webACL, string $name)
+    {
+        // Pull out and return the matching rule
+        return collect($webACL['Rules'])->firstWhere('Name', $name);
+    }
+
+    private function getOhVaporIpSet()
+    {
+        // Get all IP sets
+        $ipSets = $this->getWafV2Client()->listIPSets([
+            'Scope' => 'REGIONAL'
+        ]);
+
+        // Get the OhVapor IP set
+        return collect($ipSets->get('IPSets'))->firstWhere('Name', config('oh-vapor.ip-set.name'));
     }
 }
