@@ -47,6 +47,7 @@ class OhVaporWafUpdateCommand extends Command
      */
     public function handle()
     {
+        dd($_ENV);
         // Get the current environment
         $env = app()->environment();
 
