@@ -2,6 +2,7 @@
 
 namespace DouglasThwaites\OhVapor\Console\Commands;
 
+use Aws\Credentials\Credentials;
 use Aws\Result;
 use Aws\WAFV2\WAFV2Client;
 use Illuminate\Console\Command;
@@ -47,7 +48,6 @@ class OhVaporWafUpdateCommand extends Command
      */
     public function handle()
     {
-        dd($_ENV);
         // Get the current environment
         $env = app()->environment();
 
@@ -57,8 +57,11 @@ class OhVaporWafUpdateCommand extends Command
         // Get the WebACL with an API gateway for the current environment
         $webACL = $this->getWebACL($env);
 
+        // Skip already modified WAF
+        if($webACL['Description'] == config('oh-vapor.webACLs.description')) $this->exitAlert('WebACL already modified');
+
         // Check if IP set exists
-        $ipSet = $this->upsertWhitelistedIpSet();
+        $this->upsertWhitelistedIpSet();
 
         // Create modified webACL
         $modifiedWebACL = $webACL;
@@ -79,7 +82,7 @@ class OhVaporWafUpdateCommand extends Command
         }
 
         // Update the webACL
-        $result = $this->getWafV2Client()->updateWebACL([
+        $this->getWafV2Client()->updateWebACL([
             ...$modifiedWebACL,
             'LockToken' => $this->webAclLockToken,
             'Scope' => config('oh-vapor.webACLs.scope'),
@@ -153,8 +156,14 @@ class OhVaporWafUpdateCommand extends Command
 
     private function getWafV2Client()
     {
+        $credentials = new Credentials(
+            config('oh-vapor.aws.key'),
+            config('oh-vapor.aws.secret')
+        );
+
         return new WAFV2Client([
-            'region' => config('oh-vapor.region')
+            'region' => config('oh-vapor.region'),
+            'credentials' => $credentials
         ]);
     }
 
@@ -265,9 +274,14 @@ class OhVaporWafUpdateCommand extends Command
         $ruleActionOverrides = [];
 
         // Generate action overrides
-        foreach ($rule['Statement']['ManagedRuleGroupStatement']['RuleActionOverrides'] as $override)
+        foreach ($rule['Statement']['ManagedRuleGroupStatement']['ExcludedRules'] as $excludedRule)
         {
-            $ruleActionOverrides[] = $override;
+            $ruleActionOverrides[] = [
+                'Name' => $excludedRule['Name'],
+                'ActionToUse' => [
+                    'Count' => []
+                ]
+            ];
         }
 
         // Replace existing statement
