@@ -20,7 +20,7 @@ class OhVaporWafUpdateCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'oh-vapor:waf:update';
+    protected $signature = 'oh-vapor:update-waf';
 
     /**
      * Most recent lock token from AWS
@@ -57,7 +57,7 @@ class OhVaporWafUpdateCommand extends Command
         // Get the WebACL with an API gateway for the current environment
         $webACL = $this->getWebACL($env);
 
-        // Skip already modified WAF
+        // Skip if the WAF is already modified
         if($webACL['Description'] == config('oh-vapor.webACLs.description')) $this->exitAlert('WebACL already modified');
 
         // Check if IP set exists
@@ -118,7 +118,7 @@ class OhVaporWafUpdateCommand extends Command
     }
 
     /**
-     * Find the environments related webACL
+     * Find the environments related WebACL
      * by comparing API Gateway resources
      */
     private function getWebACL(bool|string $env) : bool|array

@@ -7,7 +7,7 @@ return [
     | AWS Credentials
     |--------------------------------------------------------------------------
     |
-    | AWS credentials with WAF permissions
+    | AWS credentials with WAF permissions.
     |
     |
     */
@@ -16,6 +16,23 @@ return [
         'secret' => env('WAF_AWS_SECRET_ACCESS_KEY'),
         'region' => env('WAF_AWS_DEFAULT_REGION', 'us-east-1')
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Oh Dear
+    |--------------------------------------------------------------------------
+    |
+    | Oh Dear settings including API key, list of site id's to
+    | put into a maintenance window and for how long the
+    | window should last if not closed.
+    |
+    */
+    'oh-dear' => [
+        'api-key' => env('OH_DEAR_API_KEY'),
+        'sites' => explode(',', env('OH_VAPOR_SITE_IDS', '')),
+        'maintenance' => 120
+    ],
+
 
     /*
     |--------------------------------------------------------------------------
