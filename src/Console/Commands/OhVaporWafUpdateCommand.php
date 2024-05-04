@@ -50,19 +50,19 @@ class OhVaporWafUpdateCommand extends Command
      */
     public function handle()
     {
-        $env = $this->argument('environment');
+        $environment = $this->argument('environment');
         $webAclDescription = config('oh-vapor.webACLs.description');
 
         // Get the Vapor configuration
-        $firewallConfig = $this->getVaporFirewallConfig($env);
+        $firewallConfig = $this->getVaporFirewallConfig($environment);
 
         // Get the WebACL with an API gateway for the current environment
-        $webACL = $this->getWebACL($env);
+        $webACL = $this->getWebACL($environment);
 
         // Skip if the WAF is already modified
         if($webACL['Description'] == $webAclDescription)
         {
-            $this->exitAlert('WebACL already modified for ' . $env);
+            $this->exitAlert('WebACL already modified for ' . $environment);
         }
 
 
@@ -127,7 +127,7 @@ class OhVaporWafUpdateCommand extends Command
      * Find the environments related WebACL
      * by comparing API Gateway resources
      */
-    private function getWebACL(bool|string $env) : bool|array
+    private function getWebACL(string $environment) : bool|array
     {
         // Get all webACLs
         $response = $this->getWafV2Client()->listWebACLs([
@@ -141,7 +141,7 @@ class OhVaporWafUpdateCommand extends Command
 
             $stage = Str::of($apiGateway['ResourceArns'][0])->explode('/')->last();
 
-            if(app()->environment() != $stage) continue;
+            if($environment != $stage) continue;
 
             // Retrieve the full webACL
             $webACL = $this->getWafV2Client()->getWebACL([
@@ -228,10 +228,10 @@ class OhVaporWafUpdateCommand extends Command
         })->toArray();
     }
 
-    private function getModifiedRateLimitRule(array $webACL) : array
+    private function getModifiedRateLimitRule(array $webACL, string $environment) : array
     {
         // Get firewall config
-        $config = $this->getVaporFirewallConfig(app()->environment());
+        $config = $this->getVaporFirewallConfig($environment);
 
         // Get the firewall rule
         $rule = $this->getFirewallRule(
@@ -263,10 +263,10 @@ class OhVaporWafUpdateCommand extends Command
         ];
     }
 
-    private function getModifiedBotControlRule(array $webACL) : array
+    private function getModifiedBotControlRule(array $webACL, string $environment) : array
     {
         // Get firewall config
-        $config = $this->getVaporFirewallConfig(app()->environment());
+        $config = $this->getVaporFirewallConfig($environment);
 
         // Get bot control rules
         $controls = $config['bot-control'];
