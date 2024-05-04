@@ -21,7 +21,7 @@ class OhVaporWafUpdateCommand extends Command
      * @var string
      */
     protected $signature = 'oh-vapor:update-waf
-                {environment : THe environment you would like to update the WAF for.}
+                {environment : The environment you would like to update the WAF for.}
     ';
 
     /**
