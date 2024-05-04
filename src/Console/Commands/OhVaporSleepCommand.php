@@ -46,8 +46,6 @@ class OhVaporSleepCommand extends Command
 
         $window = intval($this->argument('window') ?? $defaultWindow);
 
-        dd($defaultWindow, $this->argument('window'), $window);
-
         $ohDear = new OhDear($apiKey);
 
         foreach($sites as $siteId)
