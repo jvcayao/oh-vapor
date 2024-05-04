@@ -51,6 +51,7 @@ class OhVaporWafUpdateCommand extends Command
     public function handle()
     {
         $env = $this->argument('environment');
+        $webAclDescription = config('oh-vapor.webACLs.description');
 
         // Get the Vapor configuration
         $firewallConfig = $this->getVaporFirewallConfig($env);
@@ -59,7 +60,11 @@ class OhVaporWafUpdateCommand extends Command
         $webACL = $this->getWebACL($env);
 
         // Skip if the WAF is already modified
-        if($webACL['Description'] == config('oh-vapor.webACLs.description')) $this->exitAlert('WebACL already modified for ' . $env);
+        if($webACL['Description'] == $webAclDescription)
+        {
+            $this->exitAlert('WebACL already modified for ' . $env);
+        }
+
 
         // Check if IP set exists
         $this->upsertWhitelistedIpSet();
