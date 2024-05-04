@@ -9,6 +9,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -23,7 +24,9 @@ class OhVaporSleepCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'oh-vapor:start-maintenance';
+    protected $signature = 'oh-vapor:start-maintenance 
+                    {window? : Maintenance window in seconds }
+    ';
 
     /**
      * The console command description.
@@ -39,7 +42,9 @@ class OhVaporSleepCommand extends Command
     {
         $apiKey = config('oh-vapor.oh-dear.api-key');
         $sites = config('oh-vapor.oh-dear.sites');
-        $window = config('oh-vapor.oh-dear.maintenance');
+        $defaultWindow = config('oh-vapor.oh-dear.maintenance');
+
+        $window = (int) $this->argument('window') ?? $defaultWindow;
 
         $ohDear = new OhDear($apiKey);
 
