@@ -44,7 +44,7 @@ class OhVaporSleepCommand extends Command
         $sites = config('oh-vapor.oh-dear.sites');
         $defaultWindow = config('oh-vapor.oh-dear.maintenance');
 
-        $window = (int) $this->argument('window') ?? $defaultWindow;
+        $window = intval($this->argument('window') ?? $defaultWindow);
 
         dd($defaultWindow, $this->argument('window'), $window);
 
