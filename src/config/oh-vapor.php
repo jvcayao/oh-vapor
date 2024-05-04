@@ -28,9 +28,7 @@ return [
     |
     */
     'oh-dear' => [
-        'api-key' => env('OH_DEAR_API_KEY'),
-        'sites' => explode(',', env('OH_VAPOR_SITE_IDS', '')),
-        'maintenance' => 120
+        'api-key' => env('OH_DEAR_API_KEY')
     ],
 
 

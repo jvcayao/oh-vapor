@@ -20,7 +20,9 @@ class OhVaporWafUpdateCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'oh-vapor:update-waf';
+    protected $signature = 'oh-vapor:update-waf
+                {environment : THe environment you would like to update the WAF for.}
+    ';
 
     /**
      * Most recent lock token from AWS
@@ -48,8 +50,7 @@ class OhVaporWafUpdateCommand extends Command
      */
     public function handle()
     {
-        // Get the current environment
-        $env = app()->environment();
+        $env = $this->argument('environment');
 
         // Get the Vapor configuration
         $firewallConfig = $this->getVaporFirewallConfig($env);

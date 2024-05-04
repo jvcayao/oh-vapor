@@ -24,8 +24,9 @@ class OhVaporSleepCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'oh-vapor:start-maintenance 
-                    {window? : Maintenance window in seconds }
+    protected $signature = 'oh-vapor:start-maintenance
+                    {window : Maintenance window in seconds }
+                    {sites* : List of site ids }  
     ';
 
     /**
@@ -41,10 +42,8 @@ class OhVaporSleepCommand extends Command
     public function handle()
     {
         $apiKey = config('oh-vapor.oh-dear.api-key');
-        $sites = config('oh-vapor.oh-dear.sites');
-        $defaultWindow = config('oh-vapor.oh-dear.maintenance');
-
-        $window = intval($this->argument('window') ?? $defaultWindow);
+        $sites = $this->argument('sites');
+        $window = $this->argument('window');
 
         $ohDear = new OhDear($apiKey);
 
