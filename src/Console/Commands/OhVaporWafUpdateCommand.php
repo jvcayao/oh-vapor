@@ -78,13 +78,13 @@ class OhVaporWafUpdateCommand extends Command
         // Add OhVapor IP set to rate limit rule
         if(isset($firewallConfig['rate-limit']))
         {
-            $modifiedWebACL['Rules'][] = $this->getModifiedRateLimitRule($webACL);
+            $modifiedWebACL['Rules'][] = $this->getModifiedRateLimitRule($webACL, $environment);
         }
 
         // Add OhVapor IP set to bot control rule
         if(isset($firewallConfig['bot-control']))
         {
-            $modifiedWebACL['Rules'][] = $this->getModifiedBotControlRule($webACL);
+            $modifiedWebACL['Rules'][] = $this->getModifiedBotControlRule($webACL, $environment);
         }
 
         // Update the webACL
