@@ -168,7 +168,7 @@ class OhVaporWafUpdateCommand extends Command
         );
 
         return new WAFV2Client([
-            'region' => config('oh-vapor.region'),
+            'region' => config('oh-vapor.aws.region'),
             'credentials' => $credentials
         ]);
     }
