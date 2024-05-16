@@ -34,7 +34,7 @@ Create a maintenance window in OhDear for x many seconds on y many site ID's:
     php artisan oh-vapor:start-maintenance seconds siteId
 
 ### Update WAF command
-When reconfiguring the firewall OhVapor will reach out to get the [lastest list of Oh Dear IP's](https://ohdear.app/docs/faq/what-ips-does-oh-dear-monitor-from) and then create an IP set which is then applied to the WAF as a scope down statement i.e let em through ;)
+When reconfiguring the firewall OhVapor will reach out to get the [lastest list of Oh Dear IP's](https://ohdear.app/docs/faq/what-ips-does-oh-dear-monitor-from) and then create an IP set which is then applied to the WAF as a scope down statement applied to both the rate limit and bot control rules... i.e let em through ;)
 
 It'll also use/reapply the current list of firewall rules in your vapor.yml
 
