@@ -43,7 +43,7 @@ It'll also use/reapply the current list of firewall rules in your vapor.yml
 ### Where to call these command?
 These commands can be called anytime but putting them in your CI/CD makes the most sense.
     
-    # Put site Oh Dear site ID 12345 into maintenance mode for 5 minutes
+    # Put Oh Dear site ID 12345 into maintenance mode for 5 minutes
     php artisan oh-vapor:start-maintenance 300 12345
     
     # Deploy to Vapor
@@ -51,6 +51,8 @@ These commands can be called anytime but putting them in your CI/CD makes the mo
     
     # Allow Oh Dear through the firewall
     php artisan oh-vapor:update-waf production
+
+    # Maintenance period ends and Oh Dear can check your app again :)
     
 As long as the vapor deploy is quicker than your maintenance window you can dial it in till your hearts content.
     
